@@ -52,6 +52,7 @@ func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 
 func fetchData() map[string][]float32 {
 	result := map[string][]float32{}
+	var mutex sync.Mutex // Add mutex for protecting map access
 
 	departments := []string{
 		"SAAS development",
@@ -66,14 +67,15 @@ func fetchData() map[string][]float32 {
 	waitGroup.Add(len(departments))
 
 	for _, dept := range departments {
-		go fetchDepartmentData(&waitGroup, &result, dept)
+		go fetchDepartmentData(&waitGroup, &result, &mutex, dept) // Pass mutex to goroutine
 	}
 
 	waitGroup.Wait()
 
 	return result
 }
-func fetchDepartmentData(waitGroup *sync.WaitGroup, target *map[string][]float32, dept string) {
+func fetchDepartmentData(waitGroup *sync.WaitGroup, target *map[string][]float32, mutex *sync.Mutex, dept string) {
+	defer waitGroup.Done()
 	result := []float32{0, 0, 0, 0}
 
 	scanInput := dynamodb.ScanInput{
@@ -113,7 +115,8 @@ func fetchDepartmentData(waitGroup *sync.WaitGroup, target *map[string][]float32
 		}
 	}
 
+	// Protect map write with mutex
+	mutex.Lock()
 	(*target)[dept] = result
-
-	waitGroup.Done()
+	mutex.Unlock()
 }
